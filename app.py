@@ -175,7 +175,7 @@ def api_hint():
     body = json_module.dumps({
         "anthropic_version": "bedrock-2023-05-31",
         "max_tokens": 1500,
-        "temperature": 0.5,
+        "temperature": 0.1,
         "messages": [{"role": "user", "content": prompt}]
     })
 
