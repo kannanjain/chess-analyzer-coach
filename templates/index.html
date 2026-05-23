@@ -78,14 +78,7 @@
                         </div>
                     </div>
 
-                    <div class="setup-row">
-                        <label>Start from position (optional):</label>
-                        <input type="text" id="coach-fen-input"
-                               placeholder="Paste FEN — you play whichever color is to move" />
-                        <small id="coach-fen-status"></small>
-                    </div>
-
-                    <button id="btn-start-game" class="primary">Start Game</button>
+<button id="btn-start-game" class="primary">Start Game</button>
                 </div>
             </div>
 
@@ -292,28 +285,10 @@
         document.getElementById('btn-white').classList.remove('active');
     });
 
-    // FEN input — live validation and auto-detect color to move
-    document.getElementById('coach-fen-input').addEventListener('input', () => {
-        const val = document.getElementById('coach-fen-input').value.trim();
-        const statusEl = document.getElementById('coach-fen-status');
-        if (!val) { statusEl.textContent = ''; statusEl.style.color = ''; return; }
-        const tmp = new Chess();
-        if (!tmp.load(val)) {
-            statusEl.textContent = 'Invalid FEN';
-            statusEl.style.color = '#c0392b';
-        } else {
-            const side = tmp.turn() === 'w' ? 'White' : 'Black';
-            statusEl.textContent = `Valid — you will play ${side}`;
-            statusEl.style.color = '#27ae60';
-        }
-    });
-
     document.getElementById('btn-start-game').addEventListener('click', startCoachGame);
     document.getElementById('btn-new-game').addEventListener('click', () => {
         document.getElementById('coach-game').style.display = 'none';
         document.getElementById('coach-setup').style.display = '';
-        document.getElementById('coach-fen-input').value = '';
-        document.getElementById('coach-fen-status').textContent = '';
         setStatus('Ready');
     });
 
@@ -383,22 +358,8 @@
         moveHistory = [];
         hintShown = false;
 
-        const fenVal = document.getElementById('coach-fen-input').value.trim();
         coachGame = new Chess();
-
-        if (fenVal) {
-            if (!coachGame.load(fenVal)) {
-                setStatus('Invalid FEN — please correct it and try again.');
-                return;
-            }
-            // Player is always the side to move in the given FEN
-            playerColor = coachGame.turn();
-            document.getElementById('btn-white').classList.toggle('active', playerColor === 'w');
-            document.getElementById('btn-black').classList.toggle('active', playerColor === 'b');
-        } else {
-            coachGame.reset();
-            // playerColor stays as whatever the picker says
-        }
+        coachGame.reset();
 
         const orientation = playerColor === 'w' ? 'white' : 'black';
         boardCoach.orientation(orientation);
@@ -412,9 +373,7 @@
         document.getElementById('coach-game').style.display = '';
         clearCoachPanel();
 
-        // For a fresh game as Black, coach (White) goes first.
-        // When loading from FEN, it's always the player's turn — no coach move needed.
-        if (!fenVal && playerColor === 'b') {
+        if (playerColor === 'b') {
             setStatus('Coach is making the first move...');
             setTimeout(makeCoachMove, 400);
         } else {
