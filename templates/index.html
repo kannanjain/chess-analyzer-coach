@@ -107,7 +107,6 @@
                     <div class="board-section">
                         <div id="board-coach" style="width: 400px;"></div>
                         <div class="board-controls">
-                            <button id="btn-flip-coach">Flip Board</button>
                             <button id="btn-hint" class="primary">Give Hint</button>
                         </div>
                     </div>
@@ -318,7 +317,6 @@
         setStatus('Ready');
     });
 
-    document.getElementById('btn-flip-coach').addEventListener('click', () => boardCoach.flip());
     document.getElementById('btn-hint').addEventListener('click', requestHint);
 
     document.getElementById('btn-coach-set-fen').addEventListener('click', () => {
