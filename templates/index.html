@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chess Analyzer &amp; Coach</title>
+
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+    <div class="container">
+        <h1>Chess Analyzer &amp; Coach</h1>
+
+        <!-- Mode Tabs -->
+        <div class="mode-tabs">
+            <button class="mode-tab active" id="tab-analysis">Analysis Mode</button>
+            <button class="mode-tab" id="tab-coach">Coach Mode</button>
+        </div>
+
+        <!-- ===== ANALYSIS MODE ===== -->
+        <div id="mode-analysis">
+            <div class="fen-section">
+                <label for="fen-input">FEN:</label>
+                <input type="text" id="fen-input"
+                       placeholder="Paste FEN here or leave blank for starting position"
+                       value="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1" />
+                <button id="btn-set-fen">Set Position</button>
+                <button id="btn-reset">Reset</button>
+            </div>
+
+            <div class="main-layout">
+                <div class="board-section">
+                    <div id="board-analysis" style="width: 400px;"></div>
+                    <div class="board-controls">
+                        <button id="btn-flip-analysis">Flip Board</button>
+                        <button id="btn-undo-analysis">Undo</button>
+                        <button id="btn-analyze" class="primary">Next Best Move</button>
+                    </div>
+                </div>
+
+                <div class="analysis-panel" id="analysis-panel">
+                    <h2>Analysis</h2>
+                    <div id="analysis-content">
+                        <p class="placeholder">Click "Next Best Move" to analyze the current position.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== COACH MODE ===== -->
+        <div id="mode-coach" style="display:none;">
+
+            <!-- Setup screen -->
+            <div id="coach-setup">
+                <div class="coach-setup-panel">
+                    <h2>Set Up Your Game</h2>
+
+                    <div class="setup-row">
+                        <label>Play as:</label>
+                        <div class="color-picker">
+                            <button class="color-btn active" id="btn-white">White</button>
+                            <button class="color-btn" id="btn-black">Black</button>
+                        </div>
+                    </div>
+
+                    <div class="setup-row">
+                        <label>Opponent Rating: <span id="rating-display">1200</span></label>
+                        <input type="range" id="rating-slider"
+                               min="500" max="2000" step="100" value="1200" />
+                        <div class="rating-labels">
+                            <span>500</span><span>1000</span><span>1500</span><span>2000</span>
+                        </div>
+                    </div>
+
+                    <div class="setup-row">
+                        <label>Start from position (optional):</label>
+                        <input type="text" id="coach-fen-input"
+                               placeholder="Paste FEN — you play whichever color is to move" />
+                        <small id="coach-fen-status"></small>
+                    </div>
+
+                    <button id="btn-start-game" class="primary">Start Game</button>
+                </div>
+            </div>
+
+            <!-- Active game -->
+            <div id="coach-game" style="display:none;">
+                <div class="coach-info-bar">
+                    <span id="coach-game-info"></span>
+                    <button id="btn-new-game">New Game</button>
+                </div>
+
+                <div class="fen-section">
+                    <label for="coach-board-fen-input">FEN:</label>
+                    <input type="text" id="coach-board-fen-input"
+                           placeholder="Paste FEN to jump to a position" />
+                    <button id="btn-coach-set-fen">Set Position</button>
+                </div>
+
+                <div class="main-layout">
+                    <div class="board-section">
+                        <div id="board-coach" style="width: 400px;"></div>
+                        <div class="board-controls">
+                            <button id="btn-flip-coach">Flip Board</button>
+                            <button id="btn-hint" class="primary">Give Hint</button>
+                        </div>
+                    </div>
+
+                    <div class="analysis-panel" id="coach-panel">
+                        <h2>Coach</h2>
+                        <div id="coach-content">
+                            <p class="placeholder">Make your move or click "Give Hint" for guidance.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="status-bar" id="status-bar">Ready</div>
+    </div>
+
+    <script>
+    const STARTING_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+
+    // ─── Mode switching ───────────────────────────────────────────────
+    document.getElementById('tab-analysis').addEventListener('click', () => switchMode('analysis'));
+    document.getElementById('tab-coach').addEventListener('click',   () => switchMode('coach'));
+
+    function switchMode(mode) {
+        document.getElementById('mode-analysis').style.display = mode === 'analysis' ? '' : 'none';
+        document.getElementById('mode-coach').style.display    = mode === 'coach'    ? '' : 'none';
+        document.getElementById('tab-analysis').classList.toggle('active', mode === 'analysis');
+        document.getElementById('tab-coach').classList.toggle('active',    mode === 'coach');
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // ANALYSIS MODE
+    // ═══════════════════════════════════════════════════════════════════
+    let analysisGame = new Chess();
+
+    function syncFenDisplay() {
+        document.getElementById('fen-input').value = analysisGame.fen();
+    }
+
+    function onDragStartAnalysis(source, piece) {
+        if (analysisGame.game_over()) return false;
+        if (analysisGame.turn() === 'w' && piece.search(/^b/) !== -1) return false;
+        if (analysisGame.turn() === 'b' && piece.search(/^w/) !== -1) return false;
+    }
+
+    function onDropAnalysis(source, target) {
+        const move = analysisGame.move({ from: source, to: target, promotion: 'q' });
+        if (move === null) return 'snapback';
+        syncFenDisplay();
+        clearAnalysis();
+        setStatus('Moved ' + move.san + '. Click "Next Best Move" to analyze.');
+    }
+
+    const boardAnalysis = Chessboard('board-analysis', {
+        position: 'start',
+        draggable: true,
+        pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png',
+        showNotation: true,
+        onDragStart: onDragStartAnalysis,
+        onDrop: onDropAnalysis,
+        onSnapEnd: () => boardAnalysis.position(analysisGame.fen()),
+    });
+
+    document.getElementById('btn-set-fen').addEventListener('click', () => {
+        const fen = document.getElementById('fen-input').value.trim();
+        if (!fen) return;
+        if (!analysisGame.load(fen)) { setStatus('Invalid FEN.'); return; }
+        boardAnalysis.position(fen, true);
+        clearAnalysis();
+        setStatus('Position set from FEN.');
+    });
+
+    document.getElementById('btn-reset').addEventListener('click', () => {
+        analysisGame.reset();
+        document.getElementById('fen-input').value = STARTING_FEN;
+        boardAnalysis.start(true);
+        clearAnalysis();
+        setStatus('Board reset.');
+    });
+
+    document.getElementById('btn-flip-analysis').addEventListener('click', () => boardAnalysis.flip());
+
+    document.getElementById('btn-undo-analysis').addEventListener('click', () => {
+        const move = analysisGame.undo();
+        if (!move) { setStatus('Nothing to undo.'); return; }
+        boardAnalysis.position(analysisGame.fen(), false);
+        syncFenDisplay();
+        clearAnalysis();
+        setStatus('Undid ' + move.san + '.');
+    });
+
+    document.getElementById('fen-input').addEventListener('keydown', e => {
+        if (e.key === 'Enter') document.getElementById('btn-set-fen').click();
+    });
+
+    document.getElementById('btn-analyze').addEventListener('click', analyzePosition);
+
+    async function analyzePosition() {
+        const btn = document.getElementById('btn-analyze');
+        btn.disabled = true;
+        btn.textContent = 'Analyzing...';
+        setStatus('Sending position to Stockfish...');
+
+        try {
+            const response = await fetch('/api/analyze', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fen: analysisGame.fen(), depth: 18 }),
+            });
+            const data = await response.json();
+            if (!response.ok) { showAnalysisError(data.error || 'Analysis failed.'); return; }
+            displayAnalysis(data);
+            setStatus(data.bestMove ? 'Best move: ' + data.bestMove : 'Analysis complete.');
+        } catch (err) {
+            showAnalysisError('Network error: ' + err.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Next Best Move';
+        }
+    }
+
+    function displayAnalysis(data) {
+        const panel = document.getElementById('analysis-content');
+        let html = '';
+        html += `<div class="analysis-row"><span class="label">Turn:</span> ${escapeHtml(data.turnToMove)}</div>`;
+        html += `<div class="analysis-row eval"><span class="label">Evaluation:</span> ${escapeHtml(data.evaluation)}</div>`;
+
+        if (data.bestMove) {
+            html += `<div class="analysis-row best-move"><span class="label">Best Move:</span> <strong>${escapeHtml(data.bestMove)}</strong></div>`;
+        } else {
+            html += `<div class="analysis-row">No legal moves available.</div>`;
+        }
+
+        if (data.details && data.details.length > 0) {
+            html += `<div class="analysis-row"><span class="label">Explanation:</span> ${escapeHtml(data.details.join(', '))}</div>`;
+        }
+        if (data.pvSan && data.pvSan.length > 1) {
+            html += `<div class="analysis-row pv"><span class="label">Principal Variation:</span> ${escapeHtml(data.pvSan.join(' '))}</div>`;
+        }
+        if (data.mateInfo) {
+            html += `<div class="analysis-row mate-alert">*** ${escapeHtml(data.mateInfo.side)} mates in ${data.mateInfo.movesUntil} ***<br/><span class="label">Sequence:</span> ${escapeHtml(data.mateInfo.sequence)}</div>`;
+        }
+        panel.innerHTML = html;
+    }
+
+    function clearAnalysis() {
+        document.getElementById('analysis-content').innerHTML =
+            '<p class="placeholder">Click "Next Best Move" to analyze the current position.</p>';
+    }
+
+    function showAnalysisError(msg) {
+        document.getElementById('analysis-content').innerHTML =
+            `<div class="error">${escapeHtml(msg)}</div>`;
+        setStatus('Error occurred.');
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // COACH MODE
+    // ═══════════════════════════════════════════════════════════════════
+    let coachGame = new Chess();
+    let playerColor = 'w';   // 'w' or 'b'
+    let coachRating = 1200;
+    let moveHistory = [];    // SAN strings for LLM context
+    let hintShown = false;   // track if vague hint already shown
+
+    // Rating slider
+    const ratingSlider = document.getElementById('rating-slider');
+    ratingSlider.addEventListener('input', () => {
+        coachRating = parseInt(ratingSlider.value);
+        document.getElementById('rating-display').textContent = coachRating;
+    });
+
+    // Color picker
+    document.getElementById('btn-white').addEventListener('click', () => {
+        playerColor = 'w';
+        document.getElementById('btn-white').classList.add('active');
+        document.getElementById('btn-black').classList.remove('active');
+    });
+    document.getElementById('btn-black').addEventListener('click', () => {
+        playerColor = 'b';
+        document.getElementById('btn-black').classList.add('active');
+        document.getElementById('btn-white').classList.remove('active');
+    });
+
+    // FEN input — live validation and auto-detect color to move
+    document.getElementById('coach-fen-input').addEventListener('input', () => {
+        const val = document.getElementById('coach-fen-input').value.trim();
+        const statusEl = document.getElementById('coach-fen-status');
+        if (!val) { statusEl.textContent = ''; statusEl.style.color = ''; return; }
+        const tmp = new Chess();
+        if (!tmp.load(val)) {
+            statusEl.textContent = 'Invalid FEN';
+            statusEl.style.color = '#c0392b';
+        } else {
+            const side = tmp.turn() === 'w' ? 'White' : 'Black';
+            statusEl.textContent = `Valid — you will play ${side}`;
+            statusEl.style.color = '#27ae60';
+        }
+    });
+
+    document.getElementById('btn-start-game').addEventListener('click', startCoachGame);
+    document.getElementById('btn-new-game').addEventListener('click', () => {
+        document.getElementById('coach-game').style.display = 'none';
+        document.getElementById('coach-setup').style.display = '';
+        document.getElementById('coach-fen-input').value = '';
+        document.getElementById('coach-fen-status').textContent = '';
+        setStatus('Ready');
+    });
+
+    document.getElementById('btn-flip-coach').addEventListener('click', () => boardCoach.flip());
+    document.getElementById('btn-hint').addEventListener('click', requestHint);
+
+    document.getElementById('btn-coach-set-fen').addEventListener('click', () => {
+        const fen = document.getElementById('coach-board-fen-input').value.trim();
+        if (!fen) return;
+        const tmp = new Chess();
+        if (!tmp.load(fen)) { setStatus('Invalid FEN.'); return; }
+        coachGame.load(fen);
+        playerColor = coachGame.turn();
+        document.getElementById('btn-white').classList.toggle('active', playerColor === 'w');
+        document.getElementById('btn-black').classList.toggle('active', playerColor === 'b');
+        boardCoach.orientation(playerColor === 'w' ? 'white' : 'black');
+        boardCoach.position(fen, false);
+        moveHistory = [];
+        hintShown = false;
+        clearCoachPanel();
+        const colorLabel = playerColor === 'w' ? 'White' : 'Black';
+        document.getElementById('coach-game-info').textContent =
+            `You: ${colorLabel} | Coach rating: ${coachRating}`;
+        setStatus(`Position set. Your turn — you are playing ${colorLabel}.`);
+    });
+
+    document.getElementById('coach-board-fen-input').addEventListener('keydown', e => {
+        if (e.key === 'Enter') document.getElementById('btn-coach-set-fen').click();
+    });
+
+    function onDragStartCoach(source, piece) {
+        if (coachGame.game_over()) return false;
+        // Only allow player to drag their own pieces on their turn
+        if (coachGame.turn() !== playerColor) return false;
+        if (playerColor === 'w' && piece.search(/^b/) !== -1) return false;
+        if (playerColor === 'b' && piece.search(/^w/) !== -1) return false;
+    }
+
+    function onDropCoach(source, target) {
+        if (coachGame.turn() !== playerColor) return 'snapback';
+        const move = coachGame.move({ from: source, to: target, promotion: 'q' });
+        if (move === null) return 'snapback';
+
+        moveHistory.push(move.san);
+        hintShown = false;
+        clearCoachPanel();
+
+        if (coachGame.game_over()) {
+            handleGameOver();
+            return;
+        }
+
+        setStatus("Coach is thinking...");
+        setTimeout(makeCoachMove, 300);
+    }
+
+    const boardCoach = Chessboard('board-coach', {
+        position: 'start',
+        draggable: true,
+        pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png',
+        showNotation: true,
+        onDragStart: onDragStartCoach,
+        onDrop: onDropCoach,
+        onSnapEnd: () => boardCoach.position(coachGame.fen()),
+    });
+
+    function startCoachGame() {
+        moveHistory = [];
+        hintShown = false;
+
+        const fenVal = document.getElementById('coach-fen-input').value.trim();
+        coachGame = new Chess();
+
+        if (fenVal) {
+            if (!coachGame.load(fenVal)) {
+                setStatus('Invalid FEN — please correct it and try again.');
+                return;
+            }
+            // Player is always the side to move in the given FEN
+            playerColor = coachGame.turn();
+            document.getElementById('btn-white').classList.toggle('active', playerColor === 'w');
+            document.getElementById('btn-black').classList.toggle('active', playerColor === 'b');
+        } else {
+            coachGame.reset();
+            // playerColor stays as whatever the picker says
+        }
+
+        const orientation = playerColor === 'w' ? 'white' : 'black';
+        boardCoach.orientation(orientation);
+        boardCoach.position(coachGame.fen(), false);
+
+        const colorLabel = playerColor === 'w' ? 'White' : 'Black';
+        document.getElementById('coach-game-info').textContent =
+            `You: ${colorLabel} | Coach rating: ${coachRating}`;
+
+        document.getElementById('coach-setup').style.display = 'none';
+        document.getElementById('coach-game').style.display = '';
+        clearCoachPanel();
+
+        // For a fresh game as Black, coach (White) goes first.
+        // When loading from FEN, it's always the player's turn — no coach move needed.
+        if (!fenVal && playerColor === 'b') {
+            setStatus('Coach is making the first move...');
+            setTimeout(makeCoachMove, 400);
+        } else {
+            setStatus(`Your turn — you are playing ${colorLabel}.`);
+        }
+    }
+
+    async function makeCoachMove() {
+        try {
+            const response = await fetch('/api/coach/move', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fen: coachGame.fen(), rating: coachRating }),
+            });
+            const data = await response.json();
+            if (!response.ok) { setStatus('Coach error: ' + (data.error || 'unknown')); return; }
+
+            coachGame.load(data.fen);
+            moveHistory.push(data.move);
+            boardCoach.position(data.fen, true);
+
+            if (data.gameOver) {
+                handleGameOver();
+                return;
+            }
+
+            setStatus(`Coach played ${data.move}. Your turn.`);
+        } catch (err) {
+            setStatus('Network error: ' + err.message);
+        }
+    }
+
+    async function requestHint() {
+        const btn = document.getElementById('btn-hint');
+
+        if (coachGame.game_over()) return;
+        if (coachGame.turn() !== playerColor) {
+            setStatus("It's not your turn yet.");
+            return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = 'Thinking...';
+
+        try {
+            const response = await fetch('/api/hint', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    fen: coachGame.fen(),
+                    moves: moveHistory,
+                    direct: false,
+                }),
+            });
+            const data = await response.json();
+            if (!response.ok) { setStatus('Hint error: ' + (data.error || 'unknown')); return; }
+
+            hintShown = true;
+            showCoachHint(data.hint, false);
+        } catch (err) {
+            setStatus('Network error: ' + err.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Give Hint';
+        }
+    }
+
+    async function requestDirectHint() {
+        const btn = document.getElementById('btn-show-move');
+        if (btn) btn.disabled = true;
+
+        try {
+            const response = await fetch('/api/hint', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    fen: coachGame.fen(),
+                    moves: moveHistory,
+                    direct: true,
+                }),
+            });
+            const data = await response.json();
+            if (!response.ok) { setStatus('Hint error: ' + (data.error || 'unknown')); return; }
+
+            showCoachHint(data.hint, true, data.bestMove);
+        } catch (err) {
+            setStatus('Network error: ' + err.message);
+        }
+    }
+
+    function showCoachHint(hint, isDirect, bestMove) {
+        const panel = document.getElementById('coach-content');
+        let html = `<div class="hint-box">${escapeHtml(hint)}</div>`;
+
+        if (isDirect && bestMove) {
+            html += `<div class="analysis-row best-move"><span class="label">Best Move:</span> <strong>${escapeHtml(bestMove)}</strong></div>`;
+        }
+
+        if (!isDirect) {
+            html += `<button id="btn-show-move" class="show-move-btn" onclick="requestDirectHint()">Show me the move</button>`;
+        }
+
+        panel.innerHTML = html;
+    }
+
+    function clearCoachPanel() {
+        document.getElementById('coach-content').innerHTML =
+            '<p class="placeholder">Make your move or click "Give Hint" for guidance.</p>';
+    }
+
+    function handleGameOver() {
+        const result = coachGame.result ? coachGame.result() : '*';
+        const panel = document.getElementById('coach-content');
+        let msg = 'Game over!';
+        if (coachGame.in_checkmate()) {
+            msg = coachGame.turn() !== playerColor ? 'You won by checkmate!' : 'Coach wins by checkmate.';
+        } else if (coachGame.in_stalemate()) {
+            msg = 'Draw by stalemate.';
+        } else if (coachGame.in_draw()) {
+            msg = 'The game is a draw.';
+        }
+        panel.innerHTML = `<div class="game-over-msg">${escapeHtml(msg)}</div>`;
+        setStatus(msg);
+    }
+
+    // ─── Shared helpers ───────────────────────────────────────────────
+    function setStatus(msg) {
+        document.getElementById('status-bar').textContent = msg;
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        const div = document.createElement('div');
+        div.appendChild(document.createTextNode(str));
+        return div.innerHTML;
+    }
+    </script>
+</body>
+</html>

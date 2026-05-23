@@ -1,0 +1,21 @@
+# Environment / secrets
+.env
+.env.*
+
+# Stockfish — external tool, not project code (see README for install instructions)
+stockfish/
+stockfish.tar.gz
+
+# Backup files
+*_backup.py
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+
+# macOS
+.DS_Store
