@@ -100,6 +100,7 @@
                     <div class="board-section">
                         <div id="board-coach" style="width: 400px;"></div>
                         <div class="board-controls">
+                            <button id="btn-undo-coach">Undo</button>
                             <button id="btn-hint" class="primary">Give Hint</button>
                         </div>
                     </div>
@@ -294,6 +295,17 @@
 
     document.getElementById('btn-hint').addEventListener('click', requestHint);
 
+    document.getElementById('btn-undo-coach').addEventListener('click', () => {
+        // Undo coach's response + player's move (2 half-moves)
+        const undone1 = coachGame.undo();
+        const undone2 = coachGame.undo();
+        if (!undone1 && !undone2) { setStatus('Nothing to undo.'); return; }
+        moveHistory.splice(-2);
+        boardCoach.position(coachGame.fen(), false);
+        clearCoachPanel();
+        setStatus('Undid last move. Your turn.');
+    });
+
     document.getElementById('btn-coach-set-fen').addEventListener('click', () => {
         const fen = document.getElementById('coach-board-fen-input').value.trim();
         if (!fen) return;
@@ -391,9 +403,9 @@
             const data = await response.json();
             if (!response.ok) { setStatus('Coach error: ' + (data.error || 'unknown')); return; }
 
-            coachGame.load(data.fen);
+            coachGame.move(data.move);
             moveHistory.push(data.move);
-            boardCoach.position(data.fen, true);
+            boardCoach.position(coachGame.fen(), true);
 
             if (data.gameOver) {
                 handleGameOver();
