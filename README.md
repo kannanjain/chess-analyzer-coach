@@ -73,13 +73,12 @@ Then open [http://localhost:5001](http://localhost:5001) in your browser.
          │                     │                    │
          ▼                     ▼                    ▼
 ┌─────────────────┐  ┌──────────────────┐  ┌───────────────────────┐
-│   Stockfish     │  │    Stockfish     │  │  position_analyzer.py │
-│  engine.analyse │  │  engine.play     │  │  (tactic engine)      │
-│  depth 1–24     │  │  UCI_Elo 500–    │  │                       │
-│                 │  │  2000            │  │         
-                                           └──────────┬────────────┘
-                                                      │ structured facts
-                                                      ▼
+│position_analyzer│  │    Stockfish     │  │  position_analyzer.py │
+│      .py        │  │  engine.play     │  │  (tactic engine)      │
+│  (Stockfish     │  │  UCI_Elo 500–    │  │                       │
+│   depth 1–24)   │  │  2000            │  └──────────┬────────────┘
+└─────────────────┘  └──────────────────┘             │ structured facts
+                                                       ▼
                                            ┌──────────────────────┐
                                            │    AWS Bedrock       │
                                            │    Claude            │
