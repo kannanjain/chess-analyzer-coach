@@ -17,33 +17,36 @@ A web app that combines Stockfish engine analysis with an AI coaching layer to h
 
 ## Setup
 
-### 1. Install Python dependencies
+### 1. Clone the repository
 
 ```bash
+git clone https://github.com/kannanjain/chess-analyzer-coach.git
+cd chess-analyzer-coach
+```
+
+### 2. Create a virtual environment and install dependencies
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 2. Install Stockfish
+### 3. Install Stockfish
+
+Download and install Stockfish from [stockfishchess.org](https://stockfishchess.org/download/). If the binary isn't on your PATH, set the `STOCKFISH_PATH` environment variable to point at it.
+
+### 4. Configure AWS credentials
+
+Copy the example env file and fill in your credentials:
 
 ```bash
-brew install stockfish   # macOS
+cp .env.example .env
 ```
 
-Or download from [stockfishchess.org](https://stockfishchess.org/download/) and set the path:
+The hint feature uses Claude via AWS Bedrock. You'll need an AWS account with Bedrock model access enabled. See the [AWS Bedrock documentation](https://docs.aws.amazon.com/bedrock/latest/userguide/getting-started.html) to get set up and obtain credentials.
 
-```bash
-export STOCKFISH_PATH=/path/to/stockfish
-```
-
-### 3. Configure AWS credentials
-
-The coach hint feature uses Claude via AWS Bedrock. Set your bearer token in a `.env` file:
-
-```
-AWS_BEARER_TOKEN_BEDROCK=your-token-here
-```
-
-### 4. Run the app
+### 5. Run the app
 
 ```bash
 python app.py
@@ -51,9 +54,44 @@ python app.py
 
 Then open [http://localhost:5001](http://localhost:5001) in your browser.
 
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                         Browser                             │
+│        chessboard.js  ·  chess.js  ·  vanilla JS           │
+└──────────────────────────┬──────────────────────────────────┘
+                           │  HTTP / JSON
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│                  Flask server  (app.py)                     │
+│                                                             │
+│  POST /api/analyze    POST /api/coach/move   POST /api/hint │
+└────────┬─────────────────────┬────────────────────┬─────────┘
+         │                     │                    │
+         ▼                     ▼                    ▼
+┌─────────────────┐  ┌──────────────────┐  ┌───────────────────────┐
+│   Stockfish     │  │    Stockfish     │  │  position_analyzer.py │
+│  engine.analyse │  │  engine.play     │  │  (tactic engine)      │
+│  depth 1–24     │  │  UCI_Elo 500–    │  │                       │
+│                 │  │  2000            │  │         
+                                           └──────────┬────────────┘
+                                                      │ structured facts
+                                                      ▼
+                                           ┌──────────────────────┐
+                                           │    AWS Bedrock       │
+                                           │    Claude            │
+                                           └──────────────────────┘
+```
+
+---
+
 ## Stack
 
 - **Backend:** Python, Flask, python-chess
 - **Engine:** Stockfish
-- **AI coaching:** Claude Haiku via AWS Bedrock
+- **Tactic analysis:** custom Python engine in `position_analyzer.py`
+- **AI coaching:** Claude via AWS Bedrock
 - **Frontend:** chessboard.js, chess.js, vanilla JS
